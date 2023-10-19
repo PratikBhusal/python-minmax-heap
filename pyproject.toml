@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "python-minmax-heap"
+version = "0.1.0"
+description = ""
+authors = ["PratikBhusal <PratikBhusal@users.noreply.github.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+
+
+[tool.poetry.group.dev.dependencies]
+pynvim = "^0.4.3"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[[tool.mypy.overrides]]
+module = "comparable"
+disallow_any_explicit = false
