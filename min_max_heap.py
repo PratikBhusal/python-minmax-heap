@@ -2,6 +2,7 @@ from comparable import Comparable
 from typing import Iterator, Iterable, Callable
 from math import floor, log2
 from functools import partial
+from operator import lt, gt
 
 
 class MinMaxHeap:
@@ -109,23 +110,9 @@ class MinMaxHeap:
         if i == 0:
             return
 
-        def push_up_min(i: int):
-            while (
-                self._has_grandparent(i)
-                and self._arr[i]
-                < self._arr[grandparent_index := self._grandparent_index(i)]
-            ):
-                self._arr[i], self._arr[grandparent_index] = (
-                    self._arr[grandparent_index],
-                    self._arr[i],
-                )
-                i = grandparent_index
-
-        def push_up_max(i: int):
-            while (
-                self._has_grandparent(i)
-                and self._arr[i]
-                > self._arr[grandparent_index := self._grandparent_index(i)]
+        def push_up(i: int, not_invariant: Callable[[Comparable, Comparable], bool]):
+            while self._has_grandparent(i) and not_invariant(
+                self._arr[i], self._arr[grandparent_index := self._grandparent_index(i)]
             ):
                 self._arr[i], self._arr[grandparent_index] = (
                     self._arr[grandparent_index],
@@ -141,119 +128,81 @@ class MinMaxHeap:
                     self._arr[parent_index],
                     self._arr[i],
                 )
-                push_up_min(parent_index)
+                push_up(parent_index, lt)
             else:
-                push_up_max(i)
+                push_up(i, gt)
         else:
             if self._arr[i] > self._arr[parent_index]:
                 self._arr[i], self._arr[parent_index] = (
                     self._arr[parent_index],
                     self._arr[i],
                 )
-                push_up_max(parent_index)
+                push_up(parent_index, gt)
             else:
-                push_up_min(i)
+                push_up(i, lt)
 
     def _push_down(self, i: int) -> None:
-        def push_down_min(i: int) -> int:
-            min_index: int = self._left_child_index(i)
+        def push_down_optimal(i: int, is_min: bool = True) -> int:
+            invariant: Callable[[Comparable, Comparable], bool] = lt if is_min else gt
 
-            # Right child is smaller
-            if (
-                min_index + 1 < len(self._arr)
-                and self._arr[min_index + 1] < self._arr[min_index]
+            optimal_index: int = self._left_child_index(i)
+
+            # Right child more optimal
+            if optimal_index + 1 < len(self._arr) and invariant(
+                self._arr[optimal_index + 1], self._arr[optimal_index]
             ):
-                min_index += 1
+                optimal_index += 1
 
             if not self._has_grandchildren(i):
-                if self._arr[min_index] < self._arr[i]:
-                    self._arr[min_index], self._arr[i] = (
+                if invariant(self._arr[optimal_index], self._arr[i]):
+                    self._arr[optimal_index], self._arr[i] = (
                         self._arr[i],
-                        self._arr[min_index],
+                        self._arr[optimal_index],
                     )
                 raise StopIteration("No grandchildren")
 
-            min_index = min(
-                min_index,
-                min(
+            get_optimal_val = min if is_min else max
+            optimal_index = get_optimal_val(
+                optimal_index,
+                get_optimal_val(
                     self._get_grandchildren_indexes(i),
                     key=self._arr.__getitem__,
-                    default=min_index,
+                    default=optimal_index,
                 ),
                 key=self._arr.__getitem__,
             )
 
-            if self._arr[i] < self._arr[min_index]:
+            if invariant(self._arr[i], self._arr[optimal_index]):
                 raise StopIteration(
-                    f"i={i} already smallest where min_index={min_index}"
+                    f"i={i} already optimal where {is_min=},{optimal_index=}"
                 )
 
-            self._arr[min_index], self._arr[i] = self._arr[i], self._arr[min_index]
-
-            if min_index < self._left_child_index(i) + 2:  # Smallest index is child
-                raise StopIteration("Grandchildren not optimal")
-
-            min_index_parent: int = self._parent_index(min_index)
-            if self._arr[min_index] > self._arr[min_index_parent]:
-                self._arr[min_index], self._arr[min_index_parent] = (
-                    self._arr[min_index_parent],
-                    self._arr[min_index],
-                )
-
-            return min_index
-
-        def push_down_max(i: int) -> int:
-            max_index: int = self._left_child_index(i)
-
-            # Right child is larger
-            if (
-                max_index + 1 < len(self._arr)
-                and self._arr[max_index + 1] > self._arr[max_index]
-            ):
-                max_index += 1
-
-            if not self._has_grandchildren(i):
-                if self._arr[max_index] > self._arr[i]:
-                    self._arr[max_index], self._arr[i] = (
-                        self._arr[i],
-                        self._arr[max_index],
-                    )
-                raise StopIteration("No Grandchildren")
-
-            max_index = max(
-                max_index,
-                max(
-                    self._get_grandchildren_indexes(i),
-                    key=self._arr.__getitem__,
-                    default=max_index,
-                ),
-                key=self._arr.__getitem__,
+            self._arr[optimal_index], self._arr[i] = (
+                self._arr[i],
+                self._arr[optimal_index],
             )
 
-            if self._arr[i] > self._arr[max_index]:
-                raise StopIteration(
-                    f"i={i} already largest where max_index={max_index}"
-                )
-
-            self._arr[max_index], self._arr[i] = self._arr[i], self._arr[max_index]
-
-            if max_index < self._left_child_index(i) + 2:  # Smallest index is child
+            if optimal_index < self._left_child_index(i) + 2:  # Smallest index is child
                 raise StopIteration("Grandchildren not optimal")
 
-            max_index_parent: int = self._parent_index(max_index)
-            if self._arr[max_index] < self._arr[max_index_parent]:
-                self._arr[max_index], self._arr[max_index_parent] = (
-                    self._arr[max_index_parent],
-                    self._arr[max_index],
+            optimal_index_parent: int = self._parent_index(optimal_index)
+            not_invariant: Callable[[Comparable, Comparable], bool] = (
+                gt if is_min else lt
+            )
+
+            if not_invariant(self._arr[optimal_index], self._arr[optimal_index_parent]):
+                self._arr[optimal_index], self._arr[optimal_index_parent] = (
+                    self._arr[optimal_index_parent],
+                    self._arr[optimal_index],
                 )
 
-            return max_index
+            return optimal_index
 
         try:
             while self._has_children(i):
                 if self._on_max_depth(i):
-                    i = push_down_max(i)
+                    i = push_down_optimal(i, False)
                 else:
-                    i = push_down_min(i)
+                    i = push_down_optimal(i)
         except StopIteration as e:
             pass
